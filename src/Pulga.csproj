@@ -5,4 +5,9 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta1.20104.2" />
+    <PackageReference Include="System.CommandLine.Rendering" Version="0.3.0-alpha.20104.2" />
+  </ItemGroup>
+
 </Project>
