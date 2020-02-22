@@ -19,6 +19,13 @@ namespace Pulga
             : Environment.GetEnvironmentVariable("PULGA_HOME");
 
         /// <summary>
+        /// Current profile for this session
+        /// </summary>
+        public static string CurrentProfile { get; set; }
+
+        #region Helpers
+
+        /// <summary>
         /// Read PULGA_HOME value from <see cref="PulgaHome"/> and return available profile(s)
         /// </summary>
         /// <returns>Selected profile</returns>
@@ -53,11 +60,13 @@ namespace Pulga
                 : Environment.GetEnvironmentVariable("PULGA_PROFILE");
         }
 
+        #endregion
+
         #region Profile Command
 
         private static Command ProfileCommand()
         {
-            var cmd = new Command("profile", "Create, delete, edit and list user profiles for Bradesco Cartões");
+            var cmd = new Command("profile", "Select default, create, delete, edit and list user profiles for Bradesco Cartões");
 
             cmd.AddOption(new Option<bool>(new[] { "--list", "-l" })
             {
@@ -97,20 +106,23 @@ namespace Pulga
                 }
             });
 
-            cmd.Handler = CommandHandler.Create<bool, string, string, string>((list, create, delete, edit) =>
+            cmd.AddOption(new Option<string>(new[] { "--default", "-d" })
             {
-                WriteLine($"To list profiles: {list}");
-                WriteLine($"New profile name: {create}");
-                WriteLine($"Profile to delete name: {delete}");
-                WriteLine($"Profile to edit name: {edit}");
+                Description = $"Select a default profile for this session under current PULGA_HOME ({PulgaHome})",
+                Argument = new Argument<string>
+                {
+                    Arity = ArgumentArity.ExactlyOne,
+                    Name = "default",
+                    Description = "Name of the profile to use"
+                }
+            });
+
+            cmd.Handler = CommandHandler.Create<bool, string, string, string, string>((list, create, delete, edit, @default) =>
+            {
+                CurrentProfile = string.IsNullOrEmpty(@default) ? GetProfile() : GetProfile(@default);
             });
 
             return cmd;
-        }
-
-        private static void CreateNewProfile(string profileName)
-        {
-
         }
 
         #endregion
