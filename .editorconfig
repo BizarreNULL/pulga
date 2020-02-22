@@ -1,0 +1,4 @@
+﻿[*.cs]
+
+# CA1303: Não passar literais como parâmetros localizados
+dotnet_diagnostic.CA1303.severity = silent
