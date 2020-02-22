@@ -11,43 +11,110 @@ namespace Pulga
 {
     internal static class App
     {
-        private static void Start(string profileName, bool listEnvironment, bool listProfile, bool verbose, bool configure)
+        /// <summary>
+        /// Value for the current Pulga home working directory
+        /// </summary>
+        private static readonly string PulgaHome = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PULGA_HOME"))
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".pulga")
+            : Environment.GetEnvironmentVariable("PULGA_HOME");
+
+        /// <summary>
+        /// Read PULGA_HOME value from <see cref="PulgaHome"/> and return available profile(s)
+        /// </summary>
+        /// <returns>Selected profile</returns>
+        private static string GetProfile(string profileName = null)
         {
-            var pulgaHome = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PULGA_HOME"))
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".pulga")
-                : Environment.GetEnvironmentVariable("PULGA_HOME");
+            if (string.IsNullOrEmpty(PulgaHome))
+                throw new ArgumentNullException(nameof(PulgaHome));
 
-            if (!Directory.Exists(pulgaHome))
-                Directory.CreateDirectory(pulgaHome);
-
-            var profiles = Directory.GetFiles(pulgaHome)
+            var profiles = Directory.GetFiles(PulgaHome)
                 .Where(name => name.EndsWith(".json"))
                 .ToList();
 
-            if (string.IsNullOrEmpty(profiles.FirstOrDefault()))
+            if (profiles.FirstOrDefault() is null)
             {
                 WriteLine("Any profile found, create one first before run anything!");
                 WriteLine(" - Add a new profile with --configure");
                 Environment.Exit(111);
             }
 
-            var pulgaProfile = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PULGA_PROFILE"))
-                ? string.Empty
-                : Environment.GetEnvironmentVariable("PULGA_PROFILE");
+            if (!string.IsNullOrEmpty(profileName) && profiles.FirstOrDefault(p => p == profileName) != null)
+                return profileName;
 
-            if (profiles.Count > 1 && string.IsNullOrEmpty(pulgaProfile))
+            if (profiles.Count > 1)
             {
                 WriteLine("More than 1 profile found!");
                 WriteLine(" - Parametrize the defaults one with -p");
                 Environment.Exit(111);
             }
-            
-            if (string.IsNullOrEmpty(pulgaProfile))
-                pulgaProfile = profiles.First();
 
-            if (verbose)
-                WriteLine($"Using profile {pulgaProfile}");
+            return string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PULGA_PROFILE"))
+                ? profiles.First()
+                : Environment.GetEnvironmentVariable("PULGA_PROFILE");
         }
+
+        #region Profile Command
+
+        private static Command ProfileCommand()
+        {
+            var cmd = new Command("profile", "Create, delete, edit and list user profiles for Bradesco Cartões");
+
+            cmd.AddOption(new Option<bool>(new[] { "--list", "-l" })
+            {
+                Description = $"List available profiles under current PULGA_HOME ({PulgaHome})"
+            });
+
+            cmd.AddOption(new Option<string>(new[] {"--create", "-c"})
+            {
+                Description = $"Create new profiles under current PULGA_HOME ({PulgaHome})",
+                Argument = new Argument<string>
+                {
+                    Arity = ArgumentArity.ExactlyOne,
+                    Name = "name",
+                    Description = "Name to new profile"
+                }
+            });
+
+            cmd.AddOption(new Option<string>(new[] { "--delete", "-d" })
+            {
+                Description = $"Delete a profiles under current PULGA_HOME ({PulgaHome})",
+                Argument = new Argument<string>
+                {
+                    Arity = ArgumentArity.ExactlyOne,
+                    Name = "delete",
+                    Description = "Name of the profile to delete"
+                }
+            });
+
+            cmd.AddOption(new Option<string>(new[] { "--edit", "-e" })
+            {
+                Description = $"Edit a profiles under current PULGA_HOME ({PulgaHome})",
+                Argument = new Argument<string>
+                {
+                    Arity = ArgumentArity.ExactlyOne,
+                    Name = "edit",
+                    Description = "Name of the profile to edit"
+                }
+            });
+
+            cmd.Handler = CommandHandler.Create<bool, string, string, string>((list, create, delete, edit) =>
+            {
+                WriteLine($"To list profiles: {list}");
+                WriteLine($"New profile name: {create}");
+                WriteLine($"Profile to delete name: {delete}");
+                WriteLine($"Profile to edit name: {edit}");
+            });
+
+            return cmd;
+        }
+
+        private static void CreateNewProfile(string profileName)
+        {
+
+        }
+
+        #endregion
+
 
         /// <summary>
         /// Bradesco Cartões as a command line interface
@@ -56,35 +123,19 @@ namespace Pulga
         /// <returns>If the provided parameters match with the requisites</returns>
         private static async Task<int> Main(string[] args)
         {
+            var pulgaHome = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PULGA_HOME"))
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".pulga")
+                : Environment.GetEnvironmentVariable("PULGA_HOME");
+
+            if (!Directory.Exists(pulgaHome))
+                Directory.CreateDirectory(pulgaHome);
+
             var rootCommand = new RootCommand
             {
-                new Option<string>(
-                    new []{"--profile-name", "-p"},
-                    getDefaultValue: () => string.Empty,
-                    description: "Select default profile to use. Overwrite PULGA_PROFILE value"),
-
-                new Option<bool>(
-                    new []{"--list-profiles", "-l"},
-                    "List available profiles on the application"),
-
-                new Option<bool>(
-                    new []{"--environment", "-e"},
-                    "List specific application environment variables"),
-
-                new Option<bool>(
-                    new []{"--verbose", "-v"},
-                    "Enable verbose output"),
-
-                new Option<bool>(
-                    new []{"--configure", "-c"},
-                    "Start default Pulga configuration"),
-
-                new Command("list-cards", "List managed cards")
+                ProfileCommand()
             };
 
             rootCommand.Description = "Bradesco Cartões as a command line interface";
-            rootCommand.Handler =
-                CommandHandler.Create<string, bool, bool, bool, bool>(Start);
 
             return await rootCommand.InvokeAsync(args);
         }
