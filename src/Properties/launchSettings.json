@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Pulga": {
+      "commandName": "Project",
+      "commandLineArgs": "profile --profile test --edit edit_test --delete delete_test --create create_test --list"
+    }
+  }
+}
