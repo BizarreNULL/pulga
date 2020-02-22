@@ -31,28 +31,32 @@ namespace Pulga
         /// <returns>Selected profile</returns>
         private static string GetProfile(string profileName = null)
         {
-            if (string.IsNullOrEmpty(PulgaHome))
-                throw new ArgumentNullException(nameof(PulgaHome));
-
             var profiles = Directory.GetFiles(PulgaHome)
-                .Where(name => name.EndsWith(".json"))
+                .Select(Path.GetFileName)
+                .Where(name => name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                .Select(name => name.Replace(".json", string.Empty, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             if (profiles.FirstOrDefault() is null)
             {
-                WriteLine("Any profile found, create one first before run anything!");
-                WriteLine(" - Add a new profile with --configure");
-                Environment.Exit(111);
+                WriteLine("Profile not found, create one first!");
+                Environment.Exit(1);
             }
 
-            if (!string.IsNullOrEmpty(profileName) && profiles.FirstOrDefault(p => p == profileName) != null)
-                return profileName;
+            if (!string.IsNullOrEmpty(profileName))
+            {
+                var selectedProfile = profiles.FirstOrDefault(p => p == profileName);
+                
+                if (!string.IsNullOrEmpty(selectedProfile)) return profileName;
+                
+                WriteLine($"Profile \"{profileName}\" don't exist!");
+                Environment.Exit(1);
+            }
 
             if (profiles.Count > 1)
             {
-                WriteLine("More than 1 profile found!");
-                WriteLine(" - Parametrize the defaults one with -p");
-                Environment.Exit(111);
+                WriteLine("Multiples profiles found! Specify one to use");
+                Environment.Exit(1);
             }
 
             return string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PULGA_PROFILE"))
@@ -106,20 +110,20 @@ namespace Pulga
                 }
             });
 
-            cmd.AddOption(new Option<string>(new[] { "--default", "-d" })
+            cmd.AddOption(new Option<string>(new[] { "--profile", "-p" })
             {
                 Description = $"Select a default profile for this session under current PULGA_HOME ({PulgaHome})",
                 Argument = new Argument<string>
                 {
                     Arity = ArgumentArity.ExactlyOne,
-                    Name = "default",
+                    Name = "profile",
                     Description = "Name of the profile to use"
                 }
             });
 
-            cmd.Handler = CommandHandler.Create<bool, string, string, string, string>((list, create, delete, edit, @default) =>
+            cmd.Handler = CommandHandler.Create<bool, string, string, string, string>((list, create, delete, edit, profile) =>
             {
-                CurrentProfile = string.IsNullOrEmpty(@default) ? GetProfile() : GetProfile(@default);
+                CurrentProfile = string.IsNullOrEmpty(profile) ? GetProfile() : GetProfile(profile);
             });
 
             return cmd;
@@ -149,7 +153,7 @@ namespace Pulga
 
             rootCommand.Description = "Bradesco Cartões as a command line interface";
 
-            return await rootCommand.InvokeAsync(args);
+            return await rootCommand.InvokeAsync(args).ConfigureAwait(true);
         }
     }
 }
