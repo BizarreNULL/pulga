@@ -2,7 +2,7 @@
   "profiles": {
     "Pulga": {
       "commandName": "Project",
-      "commandLineArgs": "profile -d sample"
+      "commandLineArgs": "profile --profile test --edit edit_test --delete delete_test --create create_test --list"
     }
   }
 }

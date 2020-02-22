@@ -3,10 +3,7 @@ using System.IO;
 using System.Linq;
 using System.CommandLine;
 using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.CommandLine.Rendering;
 using System.CommandLine.Invocation;
-using System.CommandLine.Rendering.Views;
 
 using static System.Console;
 
@@ -26,9 +23,6 @@ namespace Pulga
         /// </summary>
         public static string CurrentProfile { get; set; }
 
-        private static InvocationContext _invocationContext;
-        private static ConsoleRenderer _consoleRenderer;
-
         #region Helpers
 
         /// <summary>
@@ -37,7 +31,13 @@ namespace Pulga
         /// <returns>Selected profile</returns>
         private static string GetProfile(string profileName = null)
         {
-            if (GetProfiles().FirstOrDefault() is null)
+            var profiles = Directory.GetFiles(PulgaHome)
+                .Select(Path.GetFileName)
+                .Where(name => name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                .Select(name => name.Replace(".json", string.Empty, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (profiles.FirstOrDefault() is null)
             {
                 WriteLine("Profile not found, create one first!");
                 Environment.Exit(1);
@@ -45,7 +45,7 @@ namespace Pulga
 
             if (!string.IsNullOrEmpty(profileName))
             {
-                var selectedProfile = GetProfiles().FirstOrDefault(p => p == profileName);
+                var selectedProfile = profiles.FirstOrDefault(p => p == profileName);
                 
                 if (!string.IsNullOrEmpty(selectedProfile)) return profileName;
                 
@@ -53,15 +53,16 @@ namespace Pulga
                 Environment.Exit(1);
             }
 
+            if (profiles.Count > 1)
+            {
+                WriteLine("Multiples profiles found! Specify one to use");
+                Environment.Exit(1);
+            }
+
             return string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PULGA_PROFILE"))
-                ? GetProfiles().First()
+                ? profiles.First()
                 : Environment.GetEnvironmentVariable("PULGA_PROFILE");
         }
-
-        private static IEnumerable<string> GetProfiles() => Directory.GetFiles(PulgaHome)
-            .Select(Path.GetFileName)
-            .Where(name => name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-            .Select(name => name.Replace(".json", string.Empty, StringComparison.OrdinalIgnoreCase));
 
         #endregion
 
@@ -69,7 +70,7 @@ namespace Pulga
 
         private static Command ProfileCommand()
         {
-            var cmd = new Command("profile", "Select default, create, delete and list user profiles for Bradesco Cartões");
+            var cmd = new Command("profile", "Select default, create, delete, edit and list user profiles for Bradesco Cartões");
 
             cmd.AddOption(new Option<bool>(new[] { "--list", "-l" })
             {
@@ -98,6 +99,17 @@ namespace Pulga
                 }
             });
 
+            cmd.AddOption(new Option<string>(new[] { "--edit", "-e" })
+            {
+                Description = $"Edit a profiles under current PULGA_HOME ({PulgaHome})",
+                Argument = new Argument<string>
+                {
+                    Arity = ArgumentArity.ExactlyOne,
+                    Name = "edit",
+                    Description = "Name of the profile to edit"
+                }
+            });
+
             cmd.AddOption(new Option<string>(new[] { "--profile", "-p" })
             {
                 Description = $"Select a default profile for this session under current PULGA_HOME ({PulgaHome})",
@@ -109,48 +121,9 @@ namespace Pulga
                 }
             });
 
-            cmd.Handler = CommandHandler.Create<bool, string, string, string>((list, create, delete, profile) =>
+            cmd.Handler = CommandHandler.Create<bool, string, string, string, string>((list, create, delete, edit, profile) =>
             {
                 CurrentProfile = string.IsNullOrEmpty(profile) ? GetProfile() : GetProfile(profile);
-
-                if (list)
-                {
-                    WriteLine($"Active profiles under PULGA_HOME ({PulgaHome}):");
-                    WriteLine();
-
-                    var profilesTable = new TableView<string>
-                    {
-                        Items = GetProfiles().ToArray()
-                    };
-
-                    // ReSharper disable once VariableHidesOuterVariable
-                    profilesTable.AddColumn(profile => profile, "Profile Name");
-                
-                    var screen = new ScreenView(_consoleRenderer, _invocationContext.Console) { Child = profilesTable };
-                    screen.Render();
-                }
-
-                if (!string.IsNullOrEmpty(delete))
-                {
-                    if (delete == CurrentProfile)
-                    {
-                        WriteLine($"You cannot delete the current profile ({delete})!");
-                        Environment.Exit(1);
-                    }
-
-                    GetProfile(delete);
-
-                    var profilePath = Path.Combine(PulgaHome, $"{delete}.json");
-
-                    if (!File.Exists(profilePath))
-                    {
-                        WriteLine($"Unable to find profile \"{delete}\"!");
-                        Environment.Exit(1);
-                    }
-
-                    File.Delete(profilePath);
-                    WriteLine($"Profile {delete} removed");
-                }
             });
 
             return cmd;
@@ -163,17 +136,9 @@ namespace Pulga
         /// Bradesco Cartões as a command line interface
         /// </summary>
         /// <param name="args">Command line arguments for the application internals.</param>
-        /// <param name="invocationContext"></param>
         /// <returns>If the provided parameters match with the requisites</returns>
-        // ReSharper disable once UnusedMember.Local
-        private static async Task<int> Main(string[] args, InvocationContext invocationContext)
+        private static async Task<int> Main(string[] args)
         {
-            _invocationContext = invocationContext;
-            _consoleRenderer = new ConsoleRenderer(
-                invocationContext.Console,
-                mode: invocationContext.BindingContext.OutputMode(),
-                resetAfterRender: true);
-            
             var pulgaHome = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PULGA_HOME"))
                 ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".pulga")
                 : Environment.GetEnvironmentVariable("PULGA_HOME");
