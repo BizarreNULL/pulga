@@ -58,11 +58,12 @@ FILENAME=$FILENAME".0"
 openssl x509 -in $CERTIFICATE_PATH >>$FILENAME
 openssl x509 -in $CERTIFICATE_PATH -text -fingerprint -noout >>$FILENAME
 
-adb -s $SERIAL_PORT shell "su 0 mount -o rw,remount /dev/block/vda /system"
+adb -s $SERIAL_PORT shell "su 0 mount -o rw,remount /system"
 adb -s $SERIAL_PORT push $FILENAME /sdcard
 adb -s $SERIAL_PORT shell "su 0 mv /sdcard/$FILENAME /system/etc/security/cacerts"
 rm $FILENAME
 adb -s $SERIAL_PORT shell "su 0 chmod 644 /system/etc/security/cacerts/$FILENAME"
+adb -s $SERIAL_PORT shell "su 0 mount -o ro,remount /system"
 
 echo "Certificate installed as system trusted credential"
 echo "Check if you able to see the new certificate listed in 'Settings > Security > Trusted Cert > Systems'"
