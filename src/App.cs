@@ -1,14 +1,13 @@
 ﻿using System;
 using System.IO;
-using System.Linq;
 using System.CommandLine;
 using System.Threading.Tasks;
-using System.Collections.Generic;
 using System.CommandLine.Rendering;
 using System.CommandLine.Invocation;
-using System.CommandLine.Rendering.Views;
 
 using static System.Console;
+
+using Pulga.Commands;
 
 namespace Pulga
 {
@@ -17,53 +16,12 @@ namespace Pulga
         /// <summary>
         /// Value for the current Pulga home working directory
         /// </summary>
-        private static readonly string PulgaHome = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PULGA_HOME"))
+        public static readonly string PulgaHome = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PULGA_HOME"))
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".pulga")
             : Environment.GetEnvironmentVariable("PULGA_HOME");
 
-        /// <summary>
-        /// Current profile for this session
-        /// </summary>
-        public static string CurrentProfile { get; set; }
-
         private static InvocationContext _invocationContext;
         private static ConsoleRenderer _consoleRenderer;
-
-        #region Helpers
-
-        /// <summary>
-        /// Read PULGA_HOME value from <see cref="PulgaHome"/> and return available profile(s)
-        /// </summary>
-        /// <returns>Selected profile</returns>
-        private static string GetProfile(string profileName = null)
-        {
-            if (GetProfiles().FirstOrDefault() is null)
-            {
-                WriteLine("Profile not found, create one first!");
-                Environment.Exit(1);
-            }
-
-            if (!string.IsNullOrEmpty(profileName))
-            {
-                var selectedProfile = GetProfiles().FirstOrDefault(p => p == profileName);
-
-                if (!string.IsNullOrEmpty(selectedProfile)) return profileName;
-
-                WriteLine($"Profile \"{profileName}\" don't exist!");
-                Environment.Exit(1);
-            }
-
-            return string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PULGA_PROFILE"))
-                ? GetProfiles().First()
-                : Environment.GetEnvironmentVariable("PULGA_PROFILE");
-        }
-
-        private static IEnumerable<string> GetProfiles() => Directory.GetFiles(PulgaHome)
-            .Select(Path.GetFileName)
-            .Where(name => name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-            .Select(name => name.Replace(".json", string.Empty, StringComparison.OrdinalIgnoreCase));
-
-        #endregion
 
         #region Profile Command
 
@@ -109,48 +67,23 @@ namespace Pulga
                 }
             });
 
-            cmd.Handler = CommandHandler.Create<bool, string, string, string>((list, create, delete, profile) =>
+            cmd.AddOption(new Option<bool>(new[] { "--current-profile"})
             {
-                CurrentProfile = string.IsNullOrEmpty(profile) ? GetProfile() : GetProfile(profile);
+                Description = "Profile used by default"
+            });
+
+            cmd.Handler = CommandHandler.Create<bool, string, string, string, bool>((list, create, delete, profile, currentProfile) =>
+            {
+                _ = new ProfileOperations(profile);
 
                 if (list)
-                {
-                    WriteLine($"Active profiles under PULGA_HOME ({PulgaHome}):");
-                    WriteLine();
+                    ProfileOperations.List(_consoleRenderer, _invocationContext);
 
-                    var profilesTable = new TableView<string>
-                    {
-                        Items = GetProfiles().ToArray()
-                    };
-
-                    // ReSharper disable once VariableHidesOuterVariable
-                    profilesTable.AddColumn(profile => profile, "Profile Name");
-
-                    var screen = new ScreenView(_consoleRenderer, _invocationContext.Console) { Child = profilesTable };
-                    screen.Render();
-                }
+                if (currentProfile)
+                    WriteLine($"Default profile is {ProfileOperations.CurrentProfile}");
 
                 if (!string.IsNullOrEmpty(delete))
-                {
-                    if (delete == CurrentProfile)
-                    {
-                        WriteLine($"You cannot delete the current profile ({delete})!");
-                        Environment.Exit(1);
-                    }
-
-                    GetProfile(delete);
-
-                    var profilePath = Path.Combine(PulgaHome, $"{delete}.json");
-
-                    if (!File.Exists(profilePath))
-                    {
-                        WriteLine($"Unable to find profile \"{delete}\"!");
-                        Environment.Exit(1);
-                    }
-
-                    File.Delete(profilePath);
-                    WriteLine($"Profile {delete} removed");
-                }
+                    ProfileOperations.Delete(delete);
             });
 
             return cmd;
